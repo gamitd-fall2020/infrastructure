@@ -3,12 +3,12 @@
 ## Installing Terraform
 
     Follow the steps given in the following link:
-    https://learn.hashicorp.com/tutorials/terraform/install-cli
+    [Terraform Installation Link] (https://learn.hashicorp.com/tutorials/terraform/install-cli)
 
 ## Install AWS CLI and Configure
 
     Follow the steps given in the following link:
-    https://docs.aws.amazon.com/cli/latest/userguide/install-cliv1.html
+    [AWS CLI Installation and Configuration Link] (https://docs.aws.amazon.com/cli/latest/userguide/install-cliv1.html)
 
 * Check the list of AWS profiles added
 
@@ -44,7 +44,7 @@
 
 1. Clone the repository
     ```sh
-    $ git clone git@github.com:gamitd-fall2020/webapp.git
+    $ git@github.com:gamitd-fall2020/infrastructure.git
     ```
 2.  run `terraform apply` to input the resource values via command line. This is the script to create a stack to setup AWS network infrastructure.
 
