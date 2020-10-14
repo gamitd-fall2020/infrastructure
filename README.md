@@ -3,12 +3,12 @@
 ## Installing Terraform
 
     Follow the steps given in the following link:
-    [Terraform Installation Link] (https://learn.hashicorp.com/tutorials/terraform/install-cli)
+    https://learn.hashicorp.com/tutorials/terraform/install-cli
 
 ## Install AWS CLI and Configure
 
     Follow the steps given in the following link:
-    [AWS CLI Installation and Configuration Link] (https://docs.aws.amazon.com/cli/latest/userguide/install-cliv1.html)
+    https://docs.aws.amazon.com/cli/latest/userguide/install-cliv1.html
 
 * Check the list of AWS profiles added
 
