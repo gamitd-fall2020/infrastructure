@@ -1,6 +1,14 @@
+variable "env" {
+     description = "Enter AWS Environment"
+     type        = string
+}
 variable "region" {
+     description = "Enter AWS Region"
      type = string
-     default = "us-east-1"
+}
+variable "vpcName" {
+     description = "Enter VPC Name"
+     type = string
 }
 variable "dnsSupport" {
      type = string
@@ -11,17 +19,14 @@ variable "dnsHostNames" {
      default = true
 }
 variable "vpcCIDRblock" {
+     description = "Enter VPC Cidr Block"
      type = string
      default = "10.0.0.0/16"
 }
 variable "subnetCIDRblock" {
+     description = "Enter Appropriate Subnet Cidr Block"
      type = list
      default = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-}
-
-variable "availabilityZone" {
-     type = list
-     default = ["us-east-1a", "us-east-1b", "us-east-1c"]
 }
 variable "destinationCIDRblock" {
     default = "0.0.0.0/0"

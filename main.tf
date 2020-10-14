@@ -1,13 +1,21 @@
 provider "aws"{
-  
+
+   #aws_profile and aws_region should be defined in '.config' and '.credential' file while setting up the CLI environment 
+   #and their values are passed via command line
+
+    profile = var.env
     region = var.region
 
 }
 
-# Create VPC
+#Getting the appropriate AWS Availability Zone
+data "aws_availability_zones" "availablilityZones" {}
+
+# Creating a VPC with a VPC Name
 resource "aws_vpc" "vpc"{
 
     cidr_block = var.vpcCIDRblock
+    
 
     enable_dns_support = var.dnsSupport
     enable_dns_hostnames = var.dnsHostNames
@@ -15,11 +23,11 @@ resource "aws_vpc" "vpc"{
     assign_generated_ipv6_cidr_block = false
 
     tags = {
-        Name = "My_VPC"
+        Name = "${var.vpcName}_${timestamp()}"
     }
 }
 
-# Create Subnets
+# Creating subnets with appropraite subnet names and subnet-cidr-block
 resource "aws_subnet" "subnet"{
 
     count = length(var.subnetCIDRblock)
@@ -27,31 +35,31 @@ resource "aws_subnet" "subnet"{
     cidr_block = var.subnetCIDRblock[count.index]
 
     vpc_id = aws_vpc.vpc.id
-    availability_zone = var.availabilityZone[count.index]
+    availability_zone = data.aws_availability_zones.availablilityZones.names[count.index]
     map_public_ip_on_launch = true
 
     tags = {
-        Name = "My_Subnet${count.index}"
+        Name = "${var.vpcName}_Subnet${count.index}"
     }
 }
 
-# Create the Internet Gateway
+# Creating an Internet Gateway
 resource "aws_internet_gateway" "igw" {
 
     vpc_id = aws_vpc.vpc.id
 
     tags = {
-        Name = "My_InternetGateway"
+        Name = "${var.vpcName}_InternetGateway"
     }
 }
 
-# Create the Route Table
+# Creating the Route Table
 resource "aws_default_route_table" "route_table" {
 
     default_route_table_id = aws_vpc.vpc.default_route_table_id
 
     tags = {
-        Name = "My_RouteTable"
+        Name = "${var.vpcName}_RouteTable"
     }
 }
 
@@ -64,7 +72,7 @@ resource "aws_route" "vpc_internet_access" {
 
 }
 
-# Associate the Route Table with the Subnets
+# Associating Route Table with the Subnets
 resource "aws_route_table_association" "subnetAssociation" {
 
     count = length(var.subnetCIDRblock)
@@ -73,7 +81,7 @@ resource "aws_route_table_association" "subnetAssociation" {
 
 }
 
-# Create the Security Group
+# Creating the Security Group
 resource "aws_default_security_group" "vpc_security_group" {
   vpc_id       = aws_vpc.vpc.id
   
@@ -110,8 +118,8 @@ resource "aws_default_security_group" "vpc_security_group" {
   }
 
     tags = {
-        Name = "My_VPC_Security_Group"
-        Description = "My VPC Security Group"
+        Name = "${var.vpcName}_Security_Group"
+        Description = "VPC Security Group"
     }
 }
 
