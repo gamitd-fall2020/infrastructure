@@ -58,14 +58,12 @@
 
 ## Network Setup Script:
 
-* The main.tf has 1 VPC, 3 subnets, 1 route table, 1 internet gateway and 1 security group to setup the network.
-* The commandline or .tfvars has following input parameters:
-        a. AWS environment (dev/prod) (type-String)
-        b. AWS region (us-east-1,us-east-2) (type-String)
-        c. VPC Name (type-String)
-*
-
-
+    1. The main.tf has 1 VPC, 3 subnets, 1 route table, 1 internet gateway and 1 security group to setup the network.
+    2. The commandline or .tfvars has following input parameters:
+            a. AWS environment (dev/prod) (type-String)
+            b. AWS region (us-east-1,us-east-2) (type-String)
+            c. VPC Name (type-String)
+    3. We can create multiple VPCs in different regions. If we try to create a VPC of same name in a same region, it's value will be written or updated.
 
 
 
