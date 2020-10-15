@@ -44,7 +44,7 @@
 
 1. Clone the repository
     ```sh
-    $ git@github.com:gamitd-fall2020/infrastructure.git
+    $ git clone git@github.com:gamitd-fall2020/infrastructure.git
     ```
 2.  run `terraform apply` to input the resource values via command line. This is the script to create a stack to setup AWS network infrastructure.
 
