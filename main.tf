@@ -39,7 +39,7 @@ resource "aws_subnet" "subnet"{
     map_public_ip_on_launch = true
 
     tags = {
-        Name = "${var.vpcName}_Subnet${count.index}"
+        Name = "${var.vpcName}_Subnet${count.index}_${timestamp()}"
     }
 }
 
@@ -59,7 +59,7 @@ resource "aws_default_route_table" "route_table" {
     default_route_table_id = aws_vpc.vpc.default_route_table_id
 
     tags = {
-        Name = "${var.vpcName}_RouteTable"
+        Name = "${var.vpcName}_RouteTable_${timestamp()}"
     }
 }
 
@@ -118,7 +118,7 @@ resource "aws_default_security_group" "vpc_security_group" {
   }
 
     tags = {
-        Name = "${var.vpcName}_Security_Group"
+        Name = "${var.vpcName}_Security_Group_${timestamp()}"
         Description = "VPC Security Group"
     }
 }
