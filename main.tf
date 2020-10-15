@@ -3,7 +3,7 @@ provider "aws"{
    #aws_profile and aws_region should be defined in '.config' and '.credential' file while setting up the CLI environment 
    #and their values are passed via command line
 
-    profile = var.env
+    profile = var.profile
     region = var.region
 
 }

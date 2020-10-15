@@ -1,4 +1,4 @@
-variable "env" {
+variable "profile" {
      description = "Enter AWS Environment"
      type        = string
 }
