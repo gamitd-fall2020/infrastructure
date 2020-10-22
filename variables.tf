@@ -39,3 +39,39 @@ variable "egressCIDRblock" {
     type = list
     default = [ "0.0.0.0/0" ]
 }
+variable "S3BucketName" {
+      type = string
+      default = "webapp.deep.gamit"
+}
+variable "rdsInstanceIdentifier"{
+     type = string
+     default = "csye6225-f20"
+}
+variable "rdsDBName"{
+     type = string
+     default = "csye6225"
+}
+variable "rdsUsername"{
+     type = string
+     default = "csye6225fall2020"
+}
+variable "rdsPassword"{
+     description = "Enter RDS Password"
+     type = string
+}
+variable "dynamoDBName"{
+     type = string
+     default = "csye6225"
+}
+variable "aws_ssh_key"{
+     description = "SSH Key Name"
+     type = string
+}
+variable "application_port"{
+     type = string
+     default = "3000"
+}
+variable "accountId"{
+     description = "Enter Dev Account ID"
+     type = string
+}
