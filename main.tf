@@ -208,7 +208,7 @@ resource "aws_db_instance" "rds" {
     storage_type = "gp2"
     engine = "mysql"
     engine_version = "5.7"
-    instance_class = "db.t2.micro"
+    instance_class = "db.t3.micro"
     publicly_accessible = false
     multi_az = false
     identifier = var.rdsInstanceIdentifier
