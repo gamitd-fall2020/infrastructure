@@ -11,6 +11,13 @@ provider "aws"{
 # Getting the appropriate AWS Availability Zone
 data "aws_availability_zones" "availablilityZones" {}
 
+# Getting the Account ID of AWS Account
+data "aws_caller_identity" "env" {}
+
+locals {
+  aws_account_id = data.aws_caller_identity.env.account_id
+}
+
 # Creating a VPC with a VPC Name
 resource "aws_vpc" "vpc"{
 
@@ -222,7 +229,7 @@ resource "aws_db_instance" "rds" {
 
 }
 
-#Dynamo DB Table
+# Dynamo DB Table
 resource "aws_dynamodb_table" "dynamodb_table" {
     name  = var.dynamoDBName
     read_capacity  = 20
@@ -237,30 +244,6 @@ resource "aws_dynamodb_table" "dynamodb_table" {
     tags = {
       Name = var.dynamoDBName
     }
-}
-
-
-# IAM Policies
-
-# IAM Policy for S3 Bucket 
-resource "aws_iam_policy" "S3_Policy" {
-  name = "WebAppS3_Policy"
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:PutObject",
-                "s3:GetObject",
-                "s3:DeleteObject"
-            ],
-            "Resource": "arn:aws:s3:::webapp.deep.gamit/*"
-        }
-    ]
-}
-EOF
 }
 
 # IAM Roles
@@ -289,7 +272,275 @@ EOF
   }
 }
 
+# IAM Role for CodeDeploy
+resource "aws_iam_role" "codeDeploy_role" {
+  name = "CodeDeployServiceRole"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "codedeploy.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+}
+
+# IAM Role for CodeDeploy EC2
+resource "aws_iam_role" "codeDeploy_EC2_role" {
+  name = "CodeDeployEC2ServiceRole"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "ec2.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+EOF
+}
+
+# CodeDeploy Application 
+resource "aws_codedeploy_app" "codeDeploy_application" {
+  compute_platform = "Server"
+  name             = "csye6225-webapp"
+}
+
+# CodeDeploy Deployment Group 
+resource "aws_codedeploy_deployment_group" "codeDeploy_deploymentGroup" {
+  app_name              = aws_codedeploy_app.codeDeploy_application.name
+  deployment_group_name = "csye6225-webapp-deployment"
+  deployment_config_name = "CodeDeployDefault.AllAtOnce"
+  service_role_arn      = aws_iam_role.codeDeploy_role.arn
+
+  ec2_tag_filter {
+    key   = "Name"
+    type  = "KEY_AND_VALUE"
+    value = "EC2Instance-CSYE6225"
+  }
+
+  deployment_style {
+    deployment_option = "WITHOUT_TRAFFIC_CONTROL"
+    deployment_type   = "IN_PLACE"
+  }
+
+  auto_rollback_configuration {
+    enabled = true
+    events  = ["DEPLOYMENT_FAILURE"]
+  }
+
+  depends_on = [aws_codedeploy_app.codeDeploy_application]
+}
+
+
+# IAM Policies
+
+# IAM Policy for ghactions User
+resource "aws_iam_policy" "GH-E2-Instance" {
+  name = "GH-E2-Instance"
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:AttachVolume",
+                "ec2:AuthorizeSecurityGroupIngress",
+                "ec2:CopyImage",
+                "ec2:CreateImage",
+                "ec2:CreateKeypair",
+                "ec2:CreateSecurityGroup",
+                "ec2:CreateSnapshot",
+                "ec2:CreateTags",
+                "ec2:CreateVolume",
+                "ec2:DeleteKeyPair",
+                "ec2:DeleteSecurityGroup",
+                "ec2:DeleteSnapshot",
+                "ec2:DeleteVolume",
+                "ec2:DeregisterImage",
+                "ec2:DescribeImageAttribute",
+                "ec2:DescribeImages",
+                "ec2:DescribeInstances",
+                "ec2:DescribeInstanceStatus",
+                "ec2:DescribeRegions",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeSnapshots",
+                "ec2:DescribeSubnets",
+                "ec2:DescribeTags",
+                "ec2:DescribeVolumes",
+                "ec2:DetachVolume",
+                "ec2:GetPasswordData",
+                "ec2:ModifyImageAttribute",
+                "ec2:ModifyInstanceAttribute",
+                "ec2:ModifySnapshotAttribute",
+                "ec2:RegisterImage",
+                "ec2:RunInstances",
+                "ec2:StopInstances",
+                "ec2:TerminateInstances"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+EOF
+}
+resource "aws_iam_policy" "GH-Upload-To-S3" {
+  name = "GH-Upload-To-S3"
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+        ],
+      "Resource":[ 
+        "arn:aws:s3:::codedeploy.${var.profile}.${var.domainName}/*"
+      ]
+    }
+  ]
+}
+EOF
+}
+resource "aws_iam_policy" "GH-Code-Deploy" {
+  name = "GH-Code-Deploy"
+  policy = <<EOF
+{
+  "Version" : "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "codedeploy:RegisterApplicationRevision",
+        "codedeploy:GetApplicationRevision"
+      ],
+      "Resource": "arn:aws:codedeploy:${var.region}:${local.aws_account_id}:application:${aws_codedeploy_app.codeDeploy_application.name}"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "codedeploy:CreateDeployment",
+        "codedeploy:GetDeployment"
+      ],
+      "Resource": "arn:aws:codedeploy:${var.region}:${local.aws_account_id}:deploymentgroup:${aws_codedeploy_app.codeDeploy_application.name}/${aws_codedeploy_deployment_group.codeDeploy_deploymentGroup.deployment_group_name}"
+      
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "codedeploy:GetDeploymentConfig"
+      ],
+      "Resource": [
+        "arn:aws:codedeploy:${var.region}:${local.aws_account_id}:deploymentconfig:CodeDeployDefault.OneAtATime",
+        "arn:aws:codedeploy:${var.region}:${local.aws_account_id}:deploymentconfig:CodeDeployDefault.HalfAtATime",
+        "arn:aws:codedeploy:${var.region}:${local.aws_account_id}:deploymentconfig:CodeDeployDefault.AllAtOnce"
+      ]
+    }
+  ]
+}
+EOF
+}
+
+# IAM Policy for CodeDeploy Role
+# This policy allows EC2 Instance to read & upload data from S3 bucket.
+resource "aws_iam_policy" "CodeDeploy-EC2-S3" {
+  name = "CodeDeploy-EC2-S3"
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "s3:Get*",
+        "s3:List*",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:DeleteObjectVersion"
+      ],
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:s3:::codedeploy.${var.profile}.${var.domainName}/*",
+        "arn:aws:s3:::webapp.${var.S3BucketName}/*"
+      ]
+    }
+  ]
+}
+EOF
+}
+
+# IAM Policy for S3 Bucket 
+resource "aws_iam_policy" "S3_Policy" {
+  name = "WebAppS3_Policy"
+  policy = <<EOF
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:DeleteObject"
+            ],
+            "Resource": "arn:aws:s3:::${var.S3BucketName}/*"
+        }
+    ]
+}
+EOF
+}
+
+# IAM User and Policies Attaachment
+
+# ghactions User and EC2 Instance Policy Attachment
+
+resource "aws_iam_user_policy_attachment" "ghactions_EC2_policy_attach" {
+  user = "ghactions"
+  policy_arn = aws_iam_policy.GH-E2-Instance.arn
+}
+
+# ghactions User and S3 Policy Attachment
+
+resource "aws_iam_user_policy_attachment" "ghactions_S3_policy_attach" {
+  user = "ghactions"
+  policy_arn = aws_iam_policy.GH-Upload-To-S3.arn
+}
+
+# ghactions User and CodeDeploy Policy Attachment
+
+resource "aws_iam_user_policy_attachment" "ghactions_codeDeploy_policy_attach" {
+  user = "ghactions"
+  policy_arn = aws_iam_policy.GH-Code-Deploy.arn
+}
+
 # IAM Roles and Policies Attachments
+
+# CodeDeploy Role and CodeDeploy Policy Attachment
+resource "aws_iam_role_policy_attachment" "CodeDeployRole_CodeDeployPolicy" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
+  role       = aws_iam_role.codeDeploy_role.name
+}
+
+# CodeDeploy Role and EC2 Instances Policy Attachment
+resource "aws_iam_role_policy_attachment" "CodeDeployRole_EC2Policy" {
+  policy_arn = aws_iam_policy.CodeDeploy-EC2-S3.arn
+  role       = aws_iam_role.codeDeploy_EC2_role.name
+}
 
 # EC2 Role and S3 Policy Attachment
 resource "aws_iam_role_policy_attachment" "EC2Role_S3Policy" {
@@ -312,7 +563,7 @@ data "aws_ami" "application_ami" {
 # Profile for the EC2 Instance
 resource "aws_iam_instance_profile" "ec2_profile" {
   name = "ec2_profile"
-  role =  aws_iam_role.EC2_Role.name
+  role =  aws_iam_role.codeDeploy_EC2_role.name
 }
 
 # EC2 Instance
@@ -344,7 +595,6 @@ resource "aws_instance" "ec2_instance" {
    }
 
    tags = {
-
      Name = "EC2Instance-CSYE6225"
    }
 
