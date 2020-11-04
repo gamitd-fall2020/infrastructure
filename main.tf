@@ -604,3 +604,19 @@ resource "aws_instance" "ec2_instance" {
   depends_on = [aws_s3_bucket.s3_bucket,aws_db_instance.rds]
    
  }
+
+ # Route 53 Zone Data
+data "aws_route53_zone" "selected" {
+  name         = "${var.profile}.${var.domainName}"
+  private_zone = false
+}
+
+ # Add/Update DNS record to public IP of EC2 Instance
+ resource "aws_route53_record" "www" {
+  zone_id = data.aws_route53_zone.selected.zone_id
+  name    = "api.${var.profile}.${var.domainName}"
+  type    = "A"
+  ttl     = "60"
+  records = [aws_instance.ec2_instance.public_ip]
+  depends_on = [aws_instance.ec2_instance]
+}
