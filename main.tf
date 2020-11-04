@@ -408,10 +408,13 @@ resource "aws_iam_policy" "GH-Upload-To-S3" {
     {
       "Effect": "Allow",
       "Action": [
-        "s3:PutObject"
+        "s3:PutObject",
+        "s3:Get*",
+        "s3:List*"
         ],
       "Resource":[ 
-        "arn:aws:s3:::codedeploy.${var.profile}.${var.domainName}/*"
+        "arn:aws:s3:::codedeploy.${var.profile}.${var.domainName}/*",
+        "arn:aws:s3:::codedeploy.${var.profile}.${var.domainName}"
       ]
     }
   ]
@@ -476,7 +479,7 @@ resource "aws_iam_policy" "CodeDeploy-EC2-S3" {
       "Effect": "Allow",
       "Resource": [
         "arn:aws:s3:::codedeploy.${var.profile}.${var.domainName}/*",
-        "arn:aws:s3:::webapp.${var.S3BucketName}/*"
+        "arn:aws:s3:::${var.S3BucketName}/*"
       ]
     }
   ]
