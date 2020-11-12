@@ -101,7 +101,7 @@ resource "aws_security_group" "application_security_group" {
     protocol    = "tcp"
   } 
 
-  # allow ingress of port 80
+  # allow ingress of port 443
   ingress {
     cidr_blocks = var.ingressCIDRblock  
     from_port   = 443
