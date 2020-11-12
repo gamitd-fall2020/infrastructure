@@ -93,14 +93,6 @@ resource "aws_security_group" "application_security_group" {
   name         = "application_security_group"
   vpc_id       = aws_vpc.vpc.id
   
-  # allow ingress of port 22
-  ingress {
-    cidr_blocks = var.ingressCIDRblock  
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-  } 
-
    # allow ingress of port 80
   ingress {
     cidr_blocks = var.ingressCIDRblock  
@@ -247,30 +239,6 @@ resource "aws_dynamodb_table" "dynamodb_table" {
 }
 
 # IAM Roles
-
-# IAM Role for EC2 Instance
-resource "aws_iam_role" "EC2_Role" {
-  name = "EC2-CSYE6225"
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": "sts:AssumeRole",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Effect": "Allow",
-      "Sid": ""
-    }
-  ]
-}
-EOF
-
-  tags = {
-    Name = "EC2-CSYE6225"
-  }
-}
 
 # IAM Role for CodeDeploy
 resource "aws_iam_role" "codeDeploy_role" {
@@ -487,27 +455,6 @@ resource "aws_iam_policy" "CodeDeploy-EC2-S3" {
 EOF
 }
 
-# IAM Policy for S3 Bucket 
-resource "aws_iam_policy" "S3_Policy" {
-  name = "WebAppS3_Policy"
-  policy = <<EOF
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "s3:PutObject",
-                "s3:GetObject",
-                "s3:DeleteObject"
-            ],
-            "Resource": "arn:aws:s3:::${var.S3BucketName}/*"
-        }
-    ]
-}
-EOF
-}
-
 # IAM User and Policies Attaachment
 
 # ghactions User and EC2 Instance Policy Attachment
@@ -545,11 +492,10 @@ resource "aws_iam_role_policy_attachment" "CodeDeployRole_EC2Policy" {
   role       = aws_iam_role.codeDeploy_EC2_role.name
 }
 
-# EC2 Role and S3 Policy Attachment
-resource "aws_iam_role_policy_attachment" "EC2Role_S3Policy" {
-  role       = aws_iam_role.EC2_Role.name
-  policy_arn = aws_iam_policy.S3_Policy.arn
-
+# EC2 Instance and CloudWatch Agent Policy Attachment
+resource "aws_iam_role_policy_attachment" "CloudWatchAgent_EC2Policy" {
+  role = aws_iam_role.codeDeploy_EC2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
 // Fetch latest published AMI
