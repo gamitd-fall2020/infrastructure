@@ -98,6 +98,13 @@ resource "aws_security_group" "loadbalancer_security_group" {
     protocol    = "tcp"
     cidr_blocks  = var.ingressCIDRblock  
   }
+
+  ingress{
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks  = var.ingressCIDRblock  
+  }
   
   egress {
     from_port = 0
@@ -117,14 +124,14 @@ resource "aws_security_group" "application_security_group" {
   name         = "application_security_group"
   vpc_id       = aws_vpc.vpc.id
   
-   # allow ingress of port 80
+  # allow ingress of port 80
   ingress {
     cidr_blocks = var.ingressCIDRblock  
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     security_groups = [ aws_security_group.loadbalancer_security_group.id ]
-  } 
+  }
 
   # allow ingress of port 443
   ingress {
@@ -176,7 +183,6 @@ resource "aws_security_group" "database_security_group" {
         Description = "Database Security Group"
   }
 }
-
 
 
 # S3 Bucket 
@@ -323,6 +329,7 @@ resource "aws_codedeploy_deployment_group" "codeDeploy_deploymentGroup" {
   deployment_group_name = "csye6225-webapp-deployment"
   deployment_config_name = "CodeDeployDefault.AllAtOnce"
   service_role_arn      = aws_iam_role.codeDeploy_role.arn
+  autoscaling_groups    = [ aws_autoscaling_group.autoscaling_group.name ]
 
   load_balancer_info {
     target_group_info {
@@ -691,13 +698,13 @@ resource "aws_cloudwatch_metric_alarm" "CPUAlarmHigh" {
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
   namespace           = "AWS/EC2"
-  period              = "300"
+  period              = "60"
   statistic           = "Average"
   threshold           = "90"
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.autoscaling_group.name
   }
-  alarm_description = "Scale-up if CPU > 90% for 10 minutes"
+  alarm_description = "Scale-up if CPU > 90% for 1 minute"
   alarm_actions     = [ aws_autoscaling_policy.WebServerScaleUpPolicy.arn ]
 }
 resource "aws_cloudwatch_metric_alarm" "CPUAlarmLow" {
@@ -706,13 +713,13 @@ resource "aws_cloudwatch_metric_alarm" "CPUAlarmLow" {
   evaluation_periods  = "2"
   metric_name         = "CPUUtilization"
   namespace           = "AWS/EC2"
-  period              = "300"
+  period              = "60"
   statistic           = "Average"
   threshold           = "70"
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.autoscaling_group.name
   }
-  alarm_description = "Scale-down if CPU < 70% for 10 minutes"
+  alarm_description = "Scale-down if CPU < 70% for 1 minute"
   alarm_actions     = [ aws_autoscaling_policy.WebServerScaleDownPolicy.arn ]
 }
 
