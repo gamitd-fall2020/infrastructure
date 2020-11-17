@@ -87,6 +87,30 @@ resource "aws_route_table_association" "subnetAssociation" {
     route_table_id = aws_default_route_table.route_table.id
 
 }
+##LOAD BALANCER SECURITY GROUP
+resource "aws_security_group" "loadbalancer_security_group" {
+  name          = "loadbalancer_security_group"
+  vpc_id        =  aws_vpc.vpc.id
+
+  ingress{
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks  = var.ingressCIDRblock  
+  }
+  
+  egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = var.egressCIDRblock  
+  }
+
+  tags = {
+        Name = "LoadBalancer_Security_Group"
+        Description = "Load Balancer Security Group"
+    }
+}
 
 # Application Security Group
 resource "aws_security_group" "application_security_group" {
@@ -99,6 +123,7 @@ resource "aws_security_group" "application_security_group" {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
+    security_groups = [ aws_security_group.loadbalancer_security_group.id ]
   } 
 
   # allow ingress of port 443
@@ -107,6 +132,7 @@ resource "aws_security_group" "application_security_group" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
+    security_groups = [ aws_security_group.loadbalancer_security_group.id ]
   } 
 
    # allow ingress of port 3000
@@ -115,6 +141,7 @@ resource "aws_security_group" "application_security_group" {
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
+    security_groups = [ aws_security_group.loadbalancer_security_group.id ]
   } 
   
   # allow egress of all ports
@@ -149,6 +176,8 @@ resource "aws_security_group" "database_security_group" {
         Description = "Database Security Group"
   }
 }
+
+
 
 # S3 Bucket 
 resource "aws_s3_bucket" "s3_bucket" {
@@ -295,6 +324,12 @@ resource "aws_codedeploy_deployment_group" "codeDeploy_deploymentGroup" {
   deployment_config_name = "CodeDeployDefault.AllAtOnce"
   service_role_arn      = aws_iam_role.codeDeploy_role.arn
 
+  load_balancer_info {
+    target_group_info {
+      name = aws_lb_target_group.alb-target-group.name
+    }
+  }
+
   ec2_tag_filter {
     key   = "Name"
     type  = "KEY_AND_VALUE"
@@ -309,6 +344,11 @@ resource "aws_codedeploy_deployment_group" "codeDeploy_deploymentGroup" {
   auto_rollback_configuration {
     enabled = true
     events  = ["DEPLOYMENT_FAILURE"]
+  }
+
+  alarm_configuration {
+    alarms  = ["Deployment-Alarm"]
+    enabled = true
   }
 
   depends_on = [aws_codedeploy_app.codeDeploy_application]
@@ -516,53 +556,208 @@ resource "aws_iam_instance_profile" "ec2_profile" {
 }
 
 # EC2 Instance
-resource "aws_instance" "ec2_instance" {
+# resource "aws_instance" "ec2_instance" {
 
-   ami = data.aws_ami.application_ami.id
-   instance_type = "t2.micro"
-   vpc_security_group_ids = [ aws_security_group.application_security_group.id ]
-   disable_api_termination = false
-   key_name = var.aws_ssh_key
-   subnet_id = aws_subnet.subnet[0].id
-   associate_public_ip_address = true
-   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-   user_data = templatefile("${path.module}/aws_instance_userdata.sh",
-                  {
-                    aws_db_host = aws_db_instance.rds.address,
-                    aws_app_port = var.application_port,
-                    s3_bucket_name = aws_s3_bucket.s3_bucket.id,
-                    aws_db_name = aws_db_instance.rds.name,
-                    aws_db_username = aws_db_instance.rds.username,
-                    aws_db_password = aws_db_instance.rds.password,
-                    aws_region = var.region
+#    ami = data.aws_ami.application_ami.id
+#    instance_type = "t2.micro"
+#    vpc_security_group_ids = [ aws_security_group.application_security_group.id ]
+#    disable_api_termination = false
+#    key_name = var.aws_ssh_key
+#    subnet_id = aws_subnet.subnet[0].id
+#    associate_public_ip_address = true
+#    iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
+#    user_data = templatefile("${path.module}/aws_instance_userdata.sh",
+#                   {
+#                     aws_db_host = aws_db_instance.rds.address,
+#                     aws_app_port = var.application_port,
+#                     s3_bucket_name = aws_s3_bucket.s3_bucket.id,
+#                     aws_db_name = aws_db_instance.rds.name,
+#                     aws_db_username = aws_db_instance.rds.username,
+#                     aws_db_password = aws_db_instance.rds.password,
+#                     aws_region = var.region
+#                   })
+
+#    root_block_device {
+#      volume_type = "gp2"
+#      volume_size = "20"
+#      delete_on_termination = true
+#    }
+
+#    tags = {
+#      Name = "EC2Instance-CSYE6225"
+#    }
+
+#   depends_on = [aws_s3_bucket.s3_bucket,aws_db_instance.rds]
+   
+#  }
+
+# AutoScaling Group Launch Configuration
+resource "aws_launch_configuration" "asg_launch_config" {
+
+  name          = "asg_launch_config"
+  image_id      = data.aws_ami.application_ami.id
+  instance_type = "t2.micro"
+  security_groups = [ aws_security_group.application_security_group.id ]
+  key_name      = var.aws_ssh_key
+  user_data     = templatefile("${path.module}/aws_instance_userdata.sh",
+                    {
+                      aws_db_host = aws_db_instance.rds.address,
+                      aws_app_port = var.application_port,
+                      s3_bucket_name = aws_s3_bucket.s3_bucket.id,
+                      aws_db_name = aws_db_instance.rds.name,
+                      aws_db_username = aws_db_instance.rds.username,
+                      aws_db_password = aws_db_instance.rds.password,
+                      aws_region = var.region
                   })
 
-   root_block_device {
-     volume_type = "gp2"
-     volume_size = "20"
-     delete_on_termination = true
-   }
+  associate_public_ip_address = true
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
 
-   tags = {
-     Name = "EC2Instance-CSYE6225"
-   }
+  root_block_device {
+    volume_type = "gp2"
+    volume_size = "20"
+    delete_on_termination = true
+  }
 
   depends_on = [aws_s3_bucket.s3_bucket,aws_db_instance.rds]
-   
- }
 
- # Route 53 Zone Data
+}
+
+# Load Balancers Target Group
+resource "aws_lb_target_group" "alb-target-group" {  
+
+  name     = "alb-target-group"  
+  port     = "3000"  
+  protocol = "HTTP"  
+  vpc_id   = aws_vpc.vpc.id  
+
+  tags     = {    
+    name = "alb-target-group"    
+  }   
+
+  health_check {    
+    healthy_threshold   = 3
+    unhealthy_threshold = 5
+    timeout             = 5
+    interval            = 30
+    path                = "/healthstatus"
+    port                = "3000"
+    matcher             = "200"
+  }
+}
+
+
+# AWS AutoScaling Group
+resource "aws_autoscaling_group" "autoscaling_group" {
+  name                 = "WebServerGroup"
+  launch_configuration = aws_launch_configuration.asg_launch_config.name
+  min_size             = 3
+  max_size             = 5
+  default_cooldown     = 60
+  desired_capacity     = 3
+
+  vpc_zone_identifier = aws_subnet.subnet.*.id
+  
+  target_group_arns    = [ aws_lb_target_group.alb-target-group.arn ]
+
+  tag {
+    key                 = "Name"
+    value               = "EC2Instance-CSYE6225"
+    propagate_at_launch = true
+  }
+
+}
+
+# AutoScaling Policies
+resource "aws_autoscaling_policy" "WebServerScaleUpPolicy" {
+  name                   = "WebServerScaleUpPolicy"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 60
+  autoscaling_group_name = aws_autoscaling_group.autoscaling_group.name
+}
+
+resource "aws_autoscaling_policy" "WebServerScaleDownPolicy" {
+  name                   = "WebServerScaleDownPolicy"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 60
+  autoscaling_group_name = aws_autoscaling_group.autoscaling_group.name
+}
+
+resource "aws_cloudwatch_metric_alarm" "CPUAlarmHigh" {
+  alarm_name          = "CPUAlarmHigh"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "90"
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.autoscaling_group.name
+  }
+  alarm_description = "Scale-up if CPU > 90% for 10 minutes"
+  alarm_actions     = [ aws_autoscaling_policy.WebServerScaleUpPolicy.arn ]
+}
+resource "aws_cloudwatch_metric_alarm" "CPUAlarmLow" {
+  alarm_name          = "CPUAlarmLow"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "70"
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.autoscaling_group.name
+  }
+  alarm_description = "Scale-down if CPU < 70% for 10 minutes"
+  alarm_actions     = [ aws_autoscaling_policy.WebServerScaleDownPolicy.arn ]
+}
+
+# Load Balancer Resource
+
+resource "aws_lb" "application_loadBalancer" {
+  name               = "ApplicationLoadBalancer"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [ aws_security_group.loadbalancer_security_group.id ]
+  subnets            = aws_subnet.subnet.*.id
+  ip_address_type    = "ipv4"
+  tags = {
+    Environment = var.profile
+    Name = "Application LoadBalancer"
+  }
+
+}
+
+resource "aws_lb_listener" "webapp_listener" {
+  load_balancer_arn = aws_lb.application_loadBalancer.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.alb-target-group.arn
+  }
+}
+
+# Route 53 Zone Data
 data "aws_route53_zone" "selected" {
   name         = "${var.profile}.${var.domainName}"
   private_zone = false
 }
 
- # Add/Update DNS record to public IP of EC2 Instance
+ # AWS Route53 Alias Record for ALB
  resource "aws_route53_record" "www" {
   zone_id = data.aws_route53_zone.selected.zone_id
-  name    = "api.${var.profile}.${var.domainName}"
+  name    = data.aws_route53_zone.selected.name
   type    = "A"
-  ttl     = "60"
-  records = [aws_instance.ec2_instance.public_ip]
-  depends_on = [aws_instance.ec2_instance]
+  
+  alias {
+    name = aws_lb.application_loadBalancer.dns_name
+    zone_id = aws_lb.application_loadBalancer.zone_id
+    evaluate_target_health = true
+  }
 }
