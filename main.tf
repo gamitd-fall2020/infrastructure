@@ -87,7 +87,8 @@ resource "aws_route_table_association" "subnetAssociation" {
     route_table_id = aws_default_route_table.route_table.id
 
 }
-##LOAD BALANCER SECURITY GROUP
+
+# Load Balancer Security Group
 resource "aws_security_group" "loadbalancer_security_group" {
   name          = "loadbalancer_security_group"
   vpc_id        =  aws_vpc.vpc.id
