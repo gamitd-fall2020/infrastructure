@@ -99,13 +99,6 @@ resource "aws_security_group" "loadbalancer_security_group" {
     protocol    = "tcp"
     cidr_blocks  = var.ingressCIDRblock  
   }
-
-  ingress{
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks  = var.ingressCIDRblock  
-  }
   
   egress {
     from_port = 0
@@ -125,23 +118,23 @@ resource "aws_security_group" "application_security_group" {
   name         = "application_security_group"
   vpc_id       = aws_vpc.vpc.id
   
-  # allow ingress of port 80
-  ingress {
-    cidr_blocks = var.ingressCIDRblock  
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    security_groups = [ aws_security_group.loadbalancer_security_group.id ]
-  }
+  # # allow ingress of port 80
+  # ingress {
+  #   cidr_blocks = var.ingressCIDRblock  
+  #   from_port   = 80
+  #   to_port     = 80
+  #   protocol    = "tcp"
+  #   security_groups = [ aws_security_group.loadbalancer_security_group.id ]
+  # }
 
-  # allow ingress of port 443
-  ingress {
-    cidr_blocks = var.ingressCIDRblock  
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    security_groups = [ aws_security_group.loadbalancer_security_group.id ]
-  } 
+  # # allow ingress of port 443
+  # ingress {
+  #   cidr_blocks = var.ingressCIDRblock  
+  #   from_port   = 443
+  #   to_port     = 443
+  #   protocol    = "tcp"
+  #   security_groups = [ aws_security_group.loadbalancer_security_group.id ]
+  # } 
 
    # allow ingress of port 3000
   ingress {
