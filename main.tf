@@ -918,7 +918,9 @@ resource "aws_iam_policy" "lambda_policy" {
          "Action": [
              "dynamodb:GetItem",
              "dynamodb:PutItem",
-             "dynamodb:UpdateItem"
+             "dynamodb:UpdateItem",
+             "dynamodb:Scan",
+             "dynamodb:DeleteItem"
          ],
          "Resource": "arn:aws:dynamodb:${var.region}:${local.aws_account_id}:table/${var.dynamoDBName}"
        },
