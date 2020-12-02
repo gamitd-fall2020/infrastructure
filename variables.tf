@@ -77,3 +77,6 @@ variable "domainName"{
      description = "Enter Domain Name"
      type = string
 }
+variable "fromAddress"{
+     type = string
+}
