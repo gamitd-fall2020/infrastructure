@@ -138,7 +138,6 @@ resource "aws_security_group" "application_security_group" {
 
    # allow ingress of port 3000
   ingress {
-    cidr_blocks = var.ingressCIDRblock  
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
@@ -253,13 +252,19 @@ resource "aws_db_instance" "rds" {
 # Dynamo DB Table
 resource "aws_dynamodb_table" "dynamodb_table" {
     name  = var.dynamoDBName
+    billing_mode   = "PROVISIONED"
     read_capacity  = 20
     write_capacity = 20
-    hash_key = "id"
+    hash_key = "email_hash"
 
     attribute {
-      name = "id"
+      name = "email_hash"
       type = "S"
+    }
+
+    ttl {
+    attribute_name = "ttl"
+    enabled = true
     }
 
     tags = {
@@ -423,7 +428,8 @@ resource "aws_iam_policy" "GH-Upload-To-S3" {
         ],
       "Resource":[ 
         "arn:aws:s3:::codedeploy.${var.profile}.${var.domainName}/*",
-        "arn:aws:s3:::codedeploy.${var.profile}.${var.domainName}"
+        "arn:aws:s3:::codedeploy.${var.profile}.${var.domainName}",
+        "arn:aws:s3:::lambda.${var.profile}.${var.domainName}/*"
       ]
     }
   ]
@@ -463,6 +469,25 @@ resource "aws_iam_policy" "GH-Code-Deploy" {
         "arn:aws:codedeploy:${var.region}:${local.aws_account_id}:deploymentconfig:CodeDeployDefault.HalfAtATime",
         "arn:aws:codedeploy:${var.region}:${local.aws_account_id}:deploymentconfig:CodeDeployDefault.AllAtOnce"
       ]
+    }
+  ]
+}
+EOF
+}
+
+resource "aws_iam_policy" "GH-Lambda" {
+  name = "GH-Lambda"
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "lambda:*"
+        ],
+
+      "Resource": "arn:aws:lambda:${var.region}:${local.aws_account_id}:function:${aws_lambda_function.lambda_sns_updates.function_name}"
     }
   ]
 }
@@ -519,6 +544,12 @@ resource "aws_iam_user_policy_attachment" "ghactions_codeDeploy_policy_attach" {
   policy_arn = aws_iam_policy.GH-Code-Deploy.arn
 }
 
+# ghactions User and Lambda Policy Attachmen
+resource "aws_iam_user_policy_attachment" "ghactions_lambda_policy_attach" {
+  policy_arn = aws_iam_policy.GH-Lambda.arn
+  user = "ghactions"
+}
+
 # IAM Roles and Policies Attachments
 
 # CodeDeploy Role and CodeDeploy Policy Attachment
@@ -539,7 +570,7 @@ resource "aws_iam_role_policy_attachment" "CloudWatchAgent_EC2Policy" {
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
 
-// Fetch latest published AMI
+# Fetch latest published AMI
 data "aws_ami" "application_ami" {
   owners = [var.accountId]
   most_recent = true
@@ -555,42 +586,6 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   name = "ec2_profile"
   role =  aws_iam_role.codeDeploy_EC2_role.name
 }
-
-# EC2 Instance
-# resource "aws_instance" "ec2_instance" {
-
-#    ami = data.aws_ami.application_ami.id
-#    instance_type = "t2.micro"
-#    vpc_security_group_ids = [ aws_security_group.application_security_group.id ]
-#    disable_api_termination = false
-#    key_name = var.aws_ssh_key
-#    subnet_id = aws_subnet.subnet[0].id
-#    associate_public_ip_address = true
-#    iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-#    user_data = templatefile("${path.module}/aws_instance_userdata.sh",
-#                   {
-#                     aws_db_host = aws_db_instance.rds.address,
-#                     aws_app_port = var.application_port,
-#                     s3_bucket_name = aws_s3_bucket.s3_bucket.id,
-#                     aws_db_name = aws_db_instance.rds.name,
-#                     aws_db_username = aws_db_instance.rds.username,
-#                     aws_db_password = aws_db_instance.rds.password,
-#                     aws_region = var.region
-#                   })
-
-#    root_block_device {
-#      volume_type = "gp2"
-#      volume_size = "20"
-#      delete_on_termination = true
-#    }
-
-#    tags = {
-#      Name = "EC2Instance-CSYE6225"
-#    }
-
-#   depends_on = [aws_s3_bucket.s3_bucket,aws_db_instance.rds]
-   
-#  }
 
 # AutoScaling Group Launch Configuration
 resource "aws_launch_configuration" "asg_launch_config" {
@@ -609,6 +604,9 @@ resource "aws_launch_configuration" "asg_launch_config" {
                       aws_db_username = aws_db_instance.rds.username,
                       aws_db_password = aws_db_instance.rds.password,
                       aws_region = var.region
+                      aws_environment = var.profile,
+                      aws_domainName = var.domainName,
+                      aws_topic_arn = aws_sns_topic.user_updates.arn
                   })
 
   associate_public_ip_address = true
@@ -761,4 +759,191 @@ data "aws_route53_zone" "selected" {
     zone_id = aws_lb.application_loadBalancer.zone_id
     evaluate_target_health = true
   }
+}
+
+# SNS Topic Creation
+resource "aws_sns_topic" "user_updates" {
+  name = "user_updates"
+}
+
+# IAM Policy Document
+data "aws_iam_policy_document" "sns_topic_policy" {
+
+  statement {
+    actions = [
+      "SNS:Subscribe",
+      "SNS:SetTopicAttributes",
+      "SNS:RemovePermission",
+      "SNS:Receive",
+      "SNS:Publish",
+      "SNS:ListSubscriptionsByTopic",
+      "SNS:GetTopicAttributes",
+      "SNS:DeleteTopic",
+      "SNS:AddPermission",
+    ]
+
+    condition {
+      test     = "StringEquals"
+      variable = "AWS:SourceOwner"
+
+      values = [
+        local.aws_account_id,
+      ]
+    }
+
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["*"]
+    }
+
+    resources = [
+      aws_sns_topic.user_updates.arn,
+    ]
+  }
+}
+
+# SNS Topic Policy
+resource "aws_sns_topic_policy" "user_updates_policy" {
+  arn = aws_sns_topic.user_updates.arn
+  policy = data.aws_iam_policy_document.sns_topic_policy.json
+}
+
+# IAM policy for SNS
+resource "aws_iam_policy" "sns_iam_policy" {
+  name = "ec2_iam_policy"
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "SNS:Publish"
+      ],
+      "Resource": "${aws_sns_topic.user_updates.arn}"
+    }
+  ]
+}
+EOF
+}
+
+# Attach the SNS topic policy to the EC2 Role
+resource "aws_iam_role_policy_attachment" "ec2_sns" {
+  policy_arn = aws_iam_policy.sns_iam_policy.arn
+  role = aws_iam_role.codeDeploy_EC2_role.name
+}
+
+
+# IAM role for Lambda
+resource "aws_iam_role" "Lambda_Role" {
+  name = "Lambda_Role"
+
+  assume_role_policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "sts:AssumeRole",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Effect": "Allow",
+      "Sid": ""
+    }
+  ]
+}
+EOF
+}
+
+# Lambda Function
+resource "aws_lambda_function" "lambda_sns_updates" {
+  filename      = "lambda_function_payload.zip"
+  function_name = "lambda_email_updates"
+  role          = aws_iam_role.Lambda_Role.arn
+  handler       = "index.handler"
+
+  source_code_hash = filebase64sha256("lambda_function_payload.zip")
+
+  runtime = "nodejs12.x"
+}
+
+resource "aws_cloudwatch_log_group" "lambda_log_group" {
+  name  = "/aws/lambda/${aws_lambda_function.lambda_sns_updates.function_name}"
+}
+
+# SNS topic subscription to Lambda
+resource "aws_sns_topic_subscription" "lambda" {
+  topic_arn = aws_sns_topic.user_updates.arn
+  protocol  = "lambda"
+  endpoint  = aws_lambda_function.lambda_sns_updates.arn
+}
+
+# SNS Lambda Permission
+resource "aws_lambda_permission" "allow_from_sns" {
+  statement_id  = "AllowExecutionFromSNS"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.lambda_sns_updates.function_name
+  principal     = "sns.amazonaws.com"
+  source_arn    = aws_sns_topic.user_updates.arn
+}
+
+# Lambda Policy
+resource "aws_iam_policy" "lambda_policy" {
+  name        = "lambda_policy"
+  description = "Policy for Cloud watch and Code Deploy"
+  policy      = <<EOF
+{
+   "Version": "2012-10-17",
+   "Statement": [
+       {
+           "Effect": "Allow",
+           "Action": "logs:CreateLogGroup",
+           "Resource": "arn:aws:logs:${var.region}:${local.aws_account_id}:*"
+       },
+        {
+           "Effect": "Allow",
+           "Action": [
+               "logs:CreateLogStream",
+               "logs:PutLogEvents"
+           ],
+           "Resource": [
+              "arn:aws:logs:${var.region}:${local.aws_account_id}:log-group:/aws/lambda/${aws_lambda_function.lambda_sns_updates.function_name}:*"
+          ]
+       },
+       {
+         "Sid": "LambdaDynamoDBAccess",
+         "Effect": "Allow",
+         "Action": [
+             "dynamodb:GetItem",
+             "dynamodb:PutItem",
+             "dynamodb:UpdateItem"
+         ],
+         "Resource": "arn:aws:dynamodb:${var.region}:${local.aws_account_id}:table/${var.dynamoDBName}"
+       },
+       {
+         "Sid": "LambdaSESAccess",
+         "Effect": "Allow",
+         "Action": [
+             "ses:VerifyEmailAddress",
+             "ses:SendEmail",
+             "ses:SendRawEmail"
+         ],
+         "Resource": "*",
+          "Condition":{
+            "StringEquals":{
+              "ses:FromAddress":"${var.fromAddress}@${var.profile}.${var.domainName}"
+            }
+          }
+       }
+   ]
+}
+ EOF
+}
+
+# Attach the policy for Lambda IAM role
+resource "aws_iam_role_policy_attachment" "lambda_role_policy_attach" {
+  role       = aws_iam_role.Lambda_Role.name
+  policy_arn = aws_iam_policy.lambda_policy.arn
 }
