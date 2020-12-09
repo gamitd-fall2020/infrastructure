@@ -14,6 +14,12 @@ data "aws_availability_zones" "availablilityZones" {}
 # Getting the Account ID of AWS Account
 data "aws_caller_identity" "env" {}
 
+# Find a certificate issued by (not imported into) ACM
+data "aws_acm_certificate" "aws_ssl_certificate" {
+  domain = "${var.profile}.${var.domainName}"
+  most_recent = true
+}
+
 locals {
   aws_account_id = data.aws_caller_identity.env.account_id
 }
@@ -94,8 +100,8 @@ resource "aws_security_group" "loadbalancer_security_group" {
   vpc_id        =  aws_vpc.vpc.id
 
   ingress{
-    from_port   = 80
-    to_port     = 80
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks  = var.ingressCIDRblock  
   }
@@ -117,24 +123,6 @@ resource "aws_security_group" "loadbalancer_security_group" {
 resource "aws_security_group" "application_security_group" {
   name         = "application_security_group"
   vpc_id       = aws_vpc.vpc.id
-  
-  # # allow ingress of port 80
-  # ingress {
-  #   cidr_blocks = var.ingressCIDRblock  
-  #   from_port   = 80
-  #   to_port     = 80
-  #   protocol    = "tcp"
-  #   security_groups = [ aws_security_group.loadbalancer_security_group.id ]
-  # }
-
-  # # allow ingress of port 443
-  # ingress {
-  #   cidr_blocks = var.ingressCIDRblock  
-  #   from_port   = 443
-  #   to_port     = 443
-  #   protocol    = "tcp"
-  #   security_groups = [ aws_security_group.loadbalancer_security_group.id ]
-  # } 
 
    # allow ingress of port 3000
   ingress {
@@ -243,10 +231,23 @@ resource "aws_db_instance" "rds" {
     username = var.rdsUsername
     password = var.rdsPassword
     skip_final_snapshot = true
-
+    parameter_group_name = aws_db_parameter_group.db_parameter_group.name
+    storage_encrypted = true
     vpc_security_group_ids = [ aws_security_group.database_security_group.id ]
     db_subnet_group_name = aws_db_subnet_group.rds_subnet_group.id
 
+}
+
+# Parameter Group for RDS
+resource "aws_db_parameter_group" "db_parameter_group" {
+  name = "rds-pg"
+  family = "mysql5.7"
+
+  parameter {
+    name  = "performance_schema"
+    value = "1"
+    apply_method = "pending-reboot"
+  }
 }
 
 # Dynamo DB Table
@@ -733,8 +734,9 @@ resource "aws_lb" "application_loadBalancer" {
 
 resource "aws_lb_listener" "webapp_listener" {
   load_balancer_arn = aws_lb.application_loadBalancer.arn
-  port              = "80"
-  protocol          = "HTTP"
+  port              = "443"
+  protocol          = "HTTPS"
+  certificate_arn   = data.aws_acm_certificate.aws_ssl_certificate.arn
 
   default_action {
     type             = "forward"
