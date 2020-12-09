@@ -64,3 +64,10 @@
             b. AWS region (us-east-1,us-east-2) (type-String)
             c. VPC Name (type-String)
     3. We can create multiple VPCs in different regions. If we try to create a VPC of same name in a same region, it's value will be written or updated.
+
+## Command to Import SSL Certificate to AWS Certificate Manager
+
+    ```sh
+    $ aws acm import-certificate --certificate fileb://Certificate.pem \ --certificate-chain fileb://CertificateChain.pem \ --private-key fileb://PrivateKey.pem 
+    ```
+
